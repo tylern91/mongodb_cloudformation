@@ -1,0 +1,5 @@
+# Compiled files
+*.backup
+.vscode
+.DS_Store
+test/*

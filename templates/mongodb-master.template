@@ -1,0 +1,612 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Deploy MongoDB Replica Set with Arbiter node(s) on AWS (Existing VPC)
+
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: Network Configuration
+        Parameters:
+          - VPC
+          - PrimaryNodeSubnet
+          - Secondary0NodeSubnet
+          - Secondary1NodeSubnet
+          - Arbiter0NodeSubnet
+          - BastionSecurityGroupID
+      - Label:
+          default: Security Configuration
+        Parameters:
+          - KeyPairName
+      - Label:
+          default: MongoDB Database Configuration
+        Parameters:
+          - ClusterReplicaSetCount
+          - Iops
+          - MongoDBVersion
+          - MongoDBAdminUsername
+          - MongoDBAdminPassword
+          - ReplicaInstanceType
+          - ArbiterInstanceType
+          - VolumeSize
+          - VolumeType
+      - Label:
+          default: AWS Configuration
+        Parameters:
+          - S3BucketName
+          - S3KeyPrefix
+          - S3BucketRegion
+    ParameterLabels:
+      BastionSecurityGroupID:
+        default: Bastion Security Group ID
+      ClusterReplicaSetCount:
+        default: Cluster Replica Set Count
+      Iops:
+        default: Iops
+      KeyPairName:
+        default: Key Pair Name
+      MongoDBAdminPassword:
+        default: MongoDB Admin Password
+      MongoDBAdminUsername:
+        default: MongoDB Admin Username
+      MongoDBVersion:
+        default: MongoDB Version
+      ReplicaInstanceType:
+        default: Replica Node Instance Type
+      ArbiterInstanceType:
+        default: Arbiter Node Instance Type
+      PrimaryNodeSubnet:
+        default: Primary Node Subnet
+      S3BucketName:
+        default: S3 Bucket Name
+      S3KeyPrefix:
+        default: S3 Key Prefix
+      S3BucketRegion:
+        default: S3 bucket region
+      Secondary0NodeSubnet:
+        default: Secondary0 Node Subnet
+      Secondary1NodeSubnet:
+        default: Secondary1 Node Subnet
+      Arbiter0NodeSubnet:
+        default: Arbiter0 Node Subnet
+      VPC:
+        default: VPC
+      VolumeSize:
+        default: Volume Size
+      VolumeType:
+        default: Volume Type
+
+Parameters:
+  BastionSecurityGroupID:
+    Description: 'ID of the Bastion Security Group (e.g., sg-7f16e910)'
+    Type: 'AWS::EC2::SecurityGroup::Id'
+  ClusterReplicaSetCount:
+    Description: Number of Replica Set Members. Choose 1 or 3
+    Type: String
+    Default: '3'
+    AllowedValues:
+      - '1'
+      - '3'
+  ReplicaInstanceType:
+    Description: Amazon EC2 instance type for the MongoDB replica nodes.
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+      - t3.xlarge
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - c5.large
+      - c5.xlarge
+      - c5.2xlarge
+      - r5.large
+      - r5.xlarge
+  ArbiterInstanceType:
+    Description: Amazon EC2 instance type for the MongoDB Arbiter nodes.
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - m5.large
+  Iops:
+    Type: String
+    Description: Iops of EBS volume when io1 type is chosen. Otherwise ignored
+    Default: '100'
+  KeyPairName:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Default: home
+    Description: >-
+      Name of an existing EC2 KeyPair. MongoDB instances will launch with this
+      KeyPair.
+  MongoDBAdminUsername:
+    Default: admin
+    NoEcho: 'true'
+    Description: MongoDB admin account username
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+  MongoDBAdminPassword:
+    AllowedPattern: '([A-Za-z0-9_@-]{8,32})'
+    ConstraintDescription: >-
+      Input your MongoDB database password, Min 8, Maximum of 32 characters. .
+      Allowed characters are: [A-Za-z0-9_@-]
+    Description: 'Enter your MongoDB Database Password, Min 8, maximum of 32 characters.'
+    NoEcho: 'true'
+    Type: String
+  MongoDBVersion:
+    Description: MongoDB version
+    Type: String
+    Default: '4.0'
+    AllowedValues:
+      - '4.0'
+      - '3.6'
+      - '3.4'
+      - '3.2'
+  PrimaryNodeSubnet:
+    Type: 'AWS::EC2::Subnet::Id'
+    Description: >-
+      Subnet-ID the existing subnet in your VPC where you want to deploy Primary
+      node(s).
+  Secondary0NodeSubnet:
+    Type: 'AWS::EC2::Subnet::Id'
+    Description: >-
+      Subnet-ID the existing subnet in your VPC where you want to deploy
+      Secondary node(s).
+  Secondary1NodeSubnet:
+    Type: 'AWS::EC2::Subnet::Id'
+    Description: >-
+      Subnet-ID the existing subnet in your VPC where you want to deploy
+      Secondary node(s).
+  Arbiter0NodeSubnet:
+    Type: 'AWS::EC2::Subnet::Id'
+    Description: >-
+      Subnet-ID the existing subnet in your VPC where you want to deploy
+      Arbiter node.
+  ReplicaSetName:
+    Description: Name for the MongoDB Replica Set
+    Type: String
+  S3BucketName:
+    AllowedPattern: '^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$'
+    Default: cloudformation-manifests
+    Type: String
+    ConstraintDescription: >-
+      bucket name can include numbers, lowercase letters, uppercase
+      letters, and hyphens (-). It cannot start or end with a hyphen (-).
+    Description: >-
+      S3 bucket name for the assets. bucket name can
+      include numbers, lowercase letters, uppercase letters, and hyphens (-). It
+      cannot start or end with a hyphen (-).
+  S3BucketRegion:
+    Default: us-east-1
+    Description: >-
+      The AWS Region where the S3 bucket (S3BucketName) is hosted.
+      When using your own bucket, you must specify this value.
+    Type: String
+  S3KeyPrefix:
+    AllowedPattern: '^[0-9a-zA-Z-/]*$'
+    Default: mongodb/
+    Type: String
+    ConstraintDescription: >-
+      key prefix can include numbers, lowercase letters, uppercase
+      letters, hyphens (-), and forward slash (/).
+    Description: >-
+      S3 key prefix for the assets. key prefix can
+      include numbers, lowercase letters, uppercase letters, hyphens (-), and
+      forward slash (/). It cannot start or end with a hyphen (-).
+  VolumeSize:
+    Type: String
+    Description: EBS Volume Size (data) to be attached to node in GBs
+    Default: '400'
+  VolumeType:
+    Type: String
+    Description: 'EBS Volume Type (data) to be attached to node in GBs [io1,gp2]'
+    Default: gp2
+    AllowedValues:
+      - gp2
+      - io1
+  VPC:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: >-
+      VPC-ID of your existing Virtual Private Cloud (VPC) where you want to
+      depoy MongoDB cluster.
+
+Conditions:
+  CreateThreeReplicaSet: !Equals
+    - !Ref ClusterReplicaSetCount
+    - '3'
+  UsingDefaultBucket: !Equals
+    - !Ref S3BucketName
+    - mongodb/
+
+Mappings:
+  AWSAMIRegionMap:
+    AMI:
+      AMZNLINUX2: amzn2-ami-hvm-2.0.20200304.0-x86_64-gp2
+    ap-east-1:
+      AMZNLINUX2: ami-33a7e042
+    ap-northeast-1:
+      AMZNLINUX2: ami-052652af12b58691f
+    ap-northeast-2:
+      AMZNLINUX2: ami-0db78afd3d150fc18
+    ap-northeast-3:
+      AMZNLINUX2: ami-075b14c8e2f90fd84
+    ap-south-1:
+      AMZNLINUX2: ami-03b5297d565ef30a6
+    ap-southeast-1:
+      AMZNLINUX2: ami-0cbc6aae997c6538a
+    ap-southeast-2:
+      AMZNLINUX2: ami-08fdde86b93accf1c
+    ca-central-1:
+      AMZNLINUX2: ami-0bf54ac1b628cf143
+    eu-central-1:
+      AMZNLINUX2: ami-0ec1ba09723e5bfac
+    eu-north-1:
+      AMZNLINUX2: ami-0f630db6194a81ad0
+    eu-west-1:
+      AMZNLINUX2: ami-04d5cc9b88f9d1d39
+    eu-west-2:
+      AMZNLINUX2: ami-0cb790308f7591fa6
+    eu-west-3:
+      AMZNLINUX2: ami-07eda9385feb1e969
+    me-south-1:
+      AMZNLINUX2: ami-05613911cb72781b8
+    sa-east-1:
+      AMZNLINUX2: ami-0b032e878a66c3b68
+    us-east-1:
+      AMZNLINUX2: ami-0fc61db8544a617ed
+    us-east-2:
+      AMZNLINUX2: ami-0e01ce4ee18447327
+    us-west-1:
+      AMZNLINUX2: ami-09a7fe78668f1e2c0
+    us-west-2:
+      AMZNLINUX2: ami-0ce21b51cb31a48b8
+    cn-north-1:
+      AMZNLINUX2: ami-075e747be97c43817
+    cn-northwest-1:
+      AMZNLINUX2: ami-09a7fe78668f1e2c0
+
+Resources:
+  MongoDBServerAccessSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Instances with access to MongoDB servers
+  MongoDBServerSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: MongoDB server management and access ports
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref BastionSecurityGroupID
+        - IpProtocol: tcp
+          FromPort: 27017
+          ToPort: 27030
+          SourceSecurityGroupId: !Ref MongoDBServerAccessSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 28017
+          ToPort: 28017
+          SourceSecurityGroupId: !Ref MongoDBServerAccessSecurityGroup
+  MongoDBInterServersSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: MongoDB inter-server communication and management ports
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref MongoDBServerSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 27017
+          ToPort: 27030
+          SourceSecurityGroupId: !Ref MongoDBServerSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 28017
+          ToPort: 28017
+          SourceSecurityGroupId: !Ref MongoDBServerSecurityGroup
+  MongoDBNodeIAMRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: mongodb-policy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:Describe*'
+                  - 'ec2:AttachNetworkInterface'
+                  - 'ec2:AttachVolume'
+                  - 'ec2:CreateTags'
+                  - 'ec2:CreateVolume'
+                  - 'ec2:RunInstances'
+                  - 'ec2:StartInstances'
+                  - 'ec2:DeleteVolume'
+                  - 'ec2:CreateSecurityGroup'
+                  - 'ec2:CreateSnapshot'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'cloudformation:DescribeStackResources'
+                  - 'cloudformation:DescribeStacks'
+                  - 'cloudformation:GetTemplate'
+                  - 'cloudformation:ListStackResources'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                Resource: !Sub
+                  - 'arn:${AWS::Partition}:s3:::${S3Bucket}/${S3KeyPrefix}*'
+                  - S3Bucket: !If
+                      - UsingDefaultBucket
+                      - !Sub '${S3BucketName}-${AWS::Region}'
+                      - !Ref S3BucketName
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:BatchGetItem'
+                  - 'dynamodb:CreateTable'
+                  - 'dynamodb:DeleteTable'
+                  - 'dynamodb:DescribeTable'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:UpdateTable'
+                Resource:
+                  - !Sub >-
+                    arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*MONGODB_*
+  MongoDBNodeIAMProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref MongoDBNodeIAMRole
+  PrimaryReplicaNode0WaitForNodeInstallWaitHandle:
+    Type: 'AWS::CloudFormation::WaitConditionHandle'
+    Properties: {}
+  PrimaryReplicaNode0:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub
+        - >-
+          https://${S3Bucket}.s3-${S3Region}.${AWS::URLSuffix}/${S3KeyPrefix}templates/mongodb-node.template
+        - S3Region: !If
+            - UsingDefaultBucket
+            - !Ref 'AWS::Region'
+            - !Ref S3BucketRegion
+          S3Bucket: !If
+            - UsingDefaultBucket
+            - !Sub '${S3BucketName}-${AWS::Region}'
+            - !Ref S3BucketName
+      Parameters:
+        ClusterReplicaSetCount: !Ref ClusterReplicaSetCount
+        ImageId: !FindInMap
+          - AWSAMIRegionMap
+          - !Ref 'AWS::Region'
+          - AMZNLINUX2
+        Iops: !Ref Iops
+        KeyName: !Ref KeyPairName
+        MongoDBAdminUsername: !Ref MongoDBAdminUsername
+        MongoDBAdminPassword: !Ref MongoDBAdminPassword
+        MongoDBServerSecurityGroupID: !Ref MongoDBServerSecurityGroup
+        MongoDBInterServersSecurityGroupID: !Ref MongoDBInterServersSecurityGroup
+        MongoDBNodeIAMProfileID: !Ref MongoDBNodeIAMProfile
+        MongoDBVersion: !Ref MongoDBVersion
+        NodeInstanceType: !Ref ReplicaInstanceType
+        NodeReplicaSetIndex: '0'
+        NodeSubnet: !Ref PrimaryNodeSubnet
+        NodeNameTag: PrimaryReplicaNode0
+        ReplicaNodeWaitForNodeInstallWaitHandle: !Ref PrimaryReplicaNode0WaitForNodeInstallWaitHandle
+        ReplicaSetName: !Ref ReplicaSetName
+        S3BucketName: !Ref S3BucketName
+        S3KeyPrefix: !Ref S3KeyPrefix
+        VolumeSize: !Ref VolumeSize
+        VolumeType: !Ref VolumeType
+        VPC: !Ref VPC
+  PrimaryReplicaNode0WaitForNodeInstall:
+    Type: 'AWS::CloudFormation::WaitCondition'
+    DependsOn: PrimaryReplicaNode0
+    Properties:
+      Handle: !Ref PrimaryReplicaNode0WaitForNodeInstallWaitHandle
+      Timeout: '1800'
+  SecondaryReplicaNode0WaitForNodeInstallWaitHandle:
+    Type: 'AWS::CloudFormation::WaitConditionHandle'
+    Properties: {}
+    Condition: CreateThreeReplicaSet
+  SecondaryReplicaNode0:
+    Condition: CreateThreeReplicaSet
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub
+        - >-
+          https://${S3Bucket}.s3-${S3Region}.${AWS::URLSuffix}/${S3KeyPrefix}templates/mongodb-node.template
+        - S3Region: !If
+            - UsingDefaultBucket
+            - !Ref 'AWS::Region'
+            - !Ref S3BucketRegion
+          S3Bucket: !If
+            - UsingDefaultBucket
+            - !Sub '${S3BucketName}-${AWS::Region}'
+            - !Ref S3BucketName
+      Parameters:
+        ClusterReplicaSetCount: !Ref ClusterReplicaSetCount
+        ImageId: !FindInMap
+          - AWSAMIRegionMap
+          - !Ref 'AWS::Region'
+          - AMZNLINUX2
+        Iops: !Ref Iops
+        KeyName: !Ref KeyPairName
+        MongoDBAdminUsername: !Ref MongoDBAdminUsername
+        MongoDBAdminPassword: !Ref MongoDBAdminPassword
+        MongoDBServerSecurityGroupID: !Ref MongoDBServerSecurityGroup
+        MongoDBInterServersSecurityGroupID: !Ref MongoDBInterServersSecurityGroup
+        MongoDBNodeIAMProfileID: !Ref MongoDBNodeIAMProfile
+        MongoDBVersion: !Ref MongoDBVersion
+        NodeInstanceType: !Ref ReplicaInstanceType
+        NodeReplicaSetIndex: '1'
+        NodeSubnet: !Ref Secondary0NodeSubnet
+        NodeNameTag: PrimaryReplicaNode0
+        ReplicaNodeWaitForNodeInstallWaitHandle: !Ref PrimaryReplicaNode0WaitForNodeInstallWaitHandle
+        ReplicaSetName: !Ref ReplicaSetName
+        S3BucketName: !Ref S3BucketName
+        S3KeyPrefix: !Ref S3KeyPrefix
+        VolumeSize: !Ref VolumeSize
+        VolumeType: !Ref VolumeType
+        VPC: !Ref VPC
+  SecondaryReplicaNode0WaitForNodeInstall:
+    Type: 'AWS::CloudFormation::WaitCondition'
+    Condition: CreateThreeReplicaSet
+    DependsOn: SecondaryReplicaNode0
+    Properties:
+      Handle: !Ref SecondaryReplicaNode0WaitForNodeInstallWaitHandle
+      Timeout: '1800'
+  SecondaryReplicaNode1WaitForNodeInstallWaitHandle:
+    Type: 'AWS::CloudFormation::WaitConditionHandle'
+    Properties: {}
+    Condition: CreateThreeReplicaSet
+  SecondaryReplicaNode1:
+    Condition: CreateThreeReplicaSet
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub
+        - >-
+          https://${S3Bucket}.s3-${S3Region}.${AWS::URLSuffix}/${S3KeyPrefix}templates/mongodb-node.template
+        - S3Region: !If
+            - UsingDefaultBucket
+            - !Ref 'AWS::Region'
+            - !Ref S3BucketRegion
+          S3Bucket: !If
+            - UsingDefaultBucket
+            - !Sub '${S3BucketName}-${AWS::Region}'
+            - !Ref S3BucketName
+      Parameters:
+        ClusterReplicaSetCount: !Ref ClusterReplicaSetCount
+        ImageId: !FindInMap
+          - AWSAMIRegionMap
+          - !Ref 'AWS::Region'
+          - AMZNLINUX2
+        Iops: !Ref Iops
+        KeyName: !Ref KeyPairName
+        MongoDBAdminUsername: !Ref MongoDBAdminUsername
+        MongoDBAdminPassword: !Ref MongoDBAdminPassword
+        MongoDBServerSecurityGroupID: !Ref MongoDBServerSecurityGroup
+        MongoDBInterServersSecurityGroupID: !Ref MongoDBInterServersSecurityGroup
+        MongoDBNodeIAMProfileID: !Ref MongoDBNodeIAMProfile
+        MongoDBVersion: !Ref MongoDBVersion
+        NodeInstanceType: !Ref ReplicaInstanceType
+        NodeReplicaSetIndex: '2'
+        NodeSubnet: !Ref Secondary1NodeSubnet
+        NodeNameTag: PrimaryReplicaNode0
+        ReplicaNodeWaitForNodeInstallWaitHandle: !Ref PrimaryReplicaNode0WaitForNodeInstallWaitHandle
+        ReplicaSetName: !Ref ReplicaSetName
+        S3BucketName: !Ref S3BucketName
+        S3KeyPrefix: !Ref S3KeyPrefix
+        VolumeSize: !Ref VolumeSize
+        VolumeType: !Ref VolumeType
+        VPC: !Ref VPC
+  SecondaryReplicaNode1WaitForNodeInstall:
+    Type: 'AWS::CloudFormation::WaitCondition'
+    Condition: CreateThreeReplicaSet
+    DependsOn: SecondaryReplicaNode1
+    Properties:
+      Handle: !Ref SecondaryReplicaNode1WaitForNodeInstallWaitHandle
+      Timeout: '1800'
+  ArbiterNode0WaitForNodeInstallWaitHandle:
+    Type: 'AWS::CloudFormation::WaitConditionHandle'
+    Properties: {}
+    Condition: CreateThreeReplicaSet
+  ArbiterNode0:
+    Condition: CreateThreeReplicaSet
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Sub
+        - >-
+          https://${S3Bucket}.s3-${S3Region}.${AWS::URLSuffix}/${S3KeyPrefix}templates/mongodb-arbiter.template
+        - S3Region: !If
+            - UsingDefaultBucket
+            - !Ref 'AWS::Region'
+            - !Ref S3BucketRegion
+          S3Bucket: !If
+            - UsingDefaultBucket
+            - !Sub '${S3BucketName}-${AWS::Region}'
+            - !Ref S3BucketName
+      Parameters:
+        ClusterReplicaSetCount: !Ref ClusterReplicaSetCount
+        ImageId: !FindInMap
+          - AWSAMIRegionMap
+          - !Ref 'AWS::Region'
+          - AMZNLINUX2
+        Iops: !Ref Iops
+        KeyName: !Ref KeyPairName
+        MongoDBServerSecurityGroupID: !Ref MongoDBServerSecurityGroup
+        MongoDBInterServersSecurityGroupID: !Ref MongoDBInterServersSecurityGroup
+        MongoDBNodeIAMProfileID: !Ref MongoDBNodeIAMProfile
+        MongoDBVersion: !Ref MongoDBVersion
+        NodeInstanceType: !Ref ArbiterInstanceType
+        NodeReplicaSetIndex: '3'
+        NodeSubnet: !Ref Arbiter0NodeSubnet
+        NodeNameTag: ArbiterNode0
+        ReplicaNodeWaitForNodeInstallWaitHandle: !Ref PrimaryReplicaNode0WaitForNodeInstallWaitHandle
+        ReplicaSetName: !Ref ReplicaSetName
+        S3BucketName: !Ref S3BucketName
+        S3KeyPrefix: !Ref S3KeyPrefix
+        VPC: !Ref VPC
+  ArbiterNode0WaitForNodeInstall:
+    Type: 'AWS::CloudFormation::WaitCondition'
+    Condition: CreateThreeReplicaSet
+    DependsOn: ArbiterNode0
+    Properties:
+      Handle: !Ref ArbiterNode0WaitForNodeInstallWaitHandle
+      Timeout: '1800'
+
+Outputs:
+  PrimaryReplicaNodeIp:
+    Value: !GetAtt
+      - PrimaryReplicaNode0
+      - Outputs.NodePrivateIp
+    Description: Private IP Address of Primary Replica Node
+  SecondaryReplicaNode0Ip:
+    Value: !GetAtt
+      - SecondaryReplicaNode0
+      - Outputs.NodePrivateIp
+    Description: Private IP Address of Secondary Replica 0 Node
+    Condition: CreateThreeReplicaSet
+  SecondaryReplicaNode1Ip:
+    Value: !GetAtt
+      - SecondaryReplicaNode1
+      - Outputs.NodePrivateIp
+    Description: Private IP Address of Secondary Replica 1 Node
+    Condition: CreateThreeReplicaSet
+  MongoDBServerAccessSecurityGroup:
+    Value: !Ref MongoDBServerAccessSecurityGroup
+    Description: MongoDB Access Security Group
