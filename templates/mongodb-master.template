@@ -160,17 +160,17 @@ Parameters:
     Type: 'AWS::EC2::Subnet::Id'
     Description: >-
       Subnet-ID the existing subnet in your VPC where you want to deploy Primary
-      node(s).
+      node.
   Secondary0NodeSubnet:
     Type: 'AWS::EC2::Subnet::Id'
     Description: >-
       Subnet-ID the existing subnet in your VPC where you want to deploy
-      Secondary node(s).
+      Secondary node.
   Secondary1NodeSubnet:
     Type: 'AWS::EC2::Subnet::Id'
     Description: >-
       Subnet-ID the existing subnet in your VPC where you want to deploy
-      Secondary node(s).
+      Secondary node.
   Arbiter0NodeSubnet:
     Type: 'AWS::EC2::Subnet::Id'
     Description: >-
