@@ -10,9 +10,11 @@
 # 7) Test it out via ./mongo_s3_backup.sh
 # 8) Set up a daily backup at midnight via `crontab -e`:
 #    0 0 * * * /home/ubuntu/mongo_s3_backup.sh > /home/ubuntu/backup.log
+read -p "Your MongoDB administrator username: " username
+read -s -p "Your MongoDB administrator password: " pswd
 
 backup_name=~/db_backups-`date +%Y-%m-%d-%H%M`
-mongodump --out $backup_name
+mongodump --out $backup_name --username $username --password $pswd
 tar czf $backup_name.tar.gz $backup_name
 aws s3 cp $backup_name.tar.gz s3://my_bucket/db_backups/
 rm -rf $backup_name
