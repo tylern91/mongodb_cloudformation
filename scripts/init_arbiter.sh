@@ -17,10 +17,10 @@ tags=`aws ec2 describe-tags --filters "Name=resource-id,Values=${AWS_INSTANCEID}
 #  gatValue() - Read a value from the instance tags
 #################################################################
 getValue() {
-    index=`echo $tags | jq '.[]' | jq '.[] | .Key == "'$1'"' | grep -n true | sed s/:.*//g | tr -d '\n'`
+    index=`echo $tags | jq '.[]' | jq '.[] | .Key == "'$1'"' | grep -n true | sed 's/:.*//g' | tr -d '\n'`
     (( index-- ))
     filter=".[$index]"
-    result=`echo $tags | jq '.[]' | jq $filter.Value | sed s/\"//g | sed s/Primary.*/Primary/g | tr -d '\n'`
+    result=`echo $tags | jq '.[]' | jq $filter.Value | sed s/\"//g | sed 's/Primary.*/Primary/g' | tr -d '\n'`
     echo $result
 }
 
@@ -59,13 +59,13 @@ NODES=`getValue ClusterReplicaSetCount`
 
 #  Do NOT use timestamps here!!
 # This has to be unique across multiple runs!
-UNIQUE_NAME=MONGODB_${TABLE_NAMETAG}_${VPC}
+#UNIQUE_NAME=MONGODB_${TABLE_NAMETAG}
 
 #################################################################
 #  Wait for all the nodes to synchronize so we have all IP addrs
 #################################################################
-    IPADDRS=$(./orchestrator.sh -g -n "${TABLE_NAMETAG}_${UNIQUE_NAME}")
-    ./orchestrator.sh -w "WORKING=${NODES}" -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
+    IPADDRS=$(./orchestrator.sh -g -n "${TABLE_NAMETAG}")
+    ./orchestrator.sh -w "WORKING=${NODES}" -n "${TABLE_NAMETAG}"
 
 #################################################################
 # Make filesystems, set ulimits and block read ahead on ALL nodes
@@ -78,8 +78,8 @@ touch /etc/udev/rules.d/85-ebs.rules
 echo 'ACTION=="add", KERNEL=="'$1'", ATTR{bdi/read_ahead_kb}="16"' | tee -a /etc/udev/rules.d/85-ebs.rules
 echo "* soft nofile 64000
 * hard nofile 64000
-* soft nproc 32000
-* hard nproc 32000" > /etc/limits.conf
+* soft nproc 64000
+* hard nproc 64000" > /etc/limits.conf
 #################################################################
 # End All Nodes
 #################################################################
@@ -126,19 +126,20 @@ echo "" >> mongod.conf
 echo "processManagement:" >> mongod.conf
 echo "  fork: true" >> mongod.conf
 echo "  pidFilePath: /var/run/mongod/mongod.pid" >> mongod.conf
+echo "" >> mongod.conf
 
 #################################################################
 #  Enable munin plugins for iostat and iostat_ios
 #################################################################
-ln -s /usr/share/munin/plugins/iostat /etc/munin/plugins/iostat
-ln -s /usr/share/munin/plugins/iostat_ios /etc/munin/plugins/iostat_ios
-touch /var/lib/munin/plugin-state/iostat-ios.state
-chown munin:munin /var/lib/munin/plugin-state/iostat-ios.state
+#ln -s /usr/share/munin/plugins/iostat /etc/munin/plugins/iostat
+#ln -s /usr/share/munin/plugins/iostat_ios /etc/munin/plugins/iostat_ios
+#touch /var/lib/munin/plugin-state/iostat-ios.state
+#chown munin:munin /var/lib/munin/plugin-state/iostat-ios.state
 
 #################################################################
 #  Figure out how much RAM we have and how to slice it up
 #################################################################
-memory=$(vmstat -s | grep "total memory" | sed -e 's/ total.*//g' | sed -e 's/[ ]//g' | tr -d '\n')
+memory=$(vmstat -s | grep "total memory" | sed -e 's/K total.*//g' | sed -e 's/[ ]//g' | tr -d '\n')
 memory=$(printf %.0f $(echo "${memory} / 1024 / 1 * .9 / 1024" | bc))
 
 if [ ${memory} -lt 1 ]; then

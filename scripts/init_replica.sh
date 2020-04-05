@@ -17,15 +17,13 @@ tags=`aws ec2 describe-tags --filters "Name=resource-id,Values=${AWS_INSTANCEID}
 #  gatValue() - Read a value from the instance tags
 #################################################################
 getValue() {
-    index=`echo $tags | jq '.[]' | jq '.[] | .Key == "'$1'"' | grep -n true | sed s/:.*//g | tr -d '\n'`
+    index=`echo $tags | jq '.[]' | jq '.[] | .Key == "'$1'"' | grep -n true | sed 's/:.*//g' | tr -d '\n'`
     (( index-- ))
     filter=".[$index]"
-    result=`echo $tags | jq '.[]' | jq $filter.Value | sed s/\"//g | sed s/.*[Pp]rimary.*/Primary/g | tr -d '\n'`
+    result=`echo $tags | jq '.[]' | jq $filter.Value | sed s/\"//g | sed 's/.*[Pp]rimary.*/Primary/g' | tr -d '\n'`
 
     echo $result
 }
-
-##version=`getValue MongoDBVersion`
 
 # MongoDBVersion set inside config.sh
 version=${MongoDBVersion}
@@ -58,32 +56,21 @@ NODE_TYPE=`getValue Name`
 IP=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
 NODES=`getValue ClusterReplicaSetCount`
 
-#  Do NOT use timestamps here!!
-# This has to be unique across multiple runs!
-UNIQUE_NAME=MONGODB_${TABLE_NAMETAG}_${VPC}
-
 #################################################################
 #  Wait for all the nodes to synchronize so we have all IP addrs
 #################################################################
 if [ "${NODE_TYPE}" == "Primary" ]; then
-    #./orchestrator.sh -c -n "${SHARD}_${UNIQUE_NAME}"
-    #./orchestrator.sh -s "WORKING" -n "${SHARD}_${UNIQUE_NAME}"
-    #./orchestrator.sh -w "WORKING=${NODES}" -n "${SHARD}_${UNIQUE_NAME}"
-    #IPADDRS=$(./orchestrator.sh -g -n "${SHARD}_${UNIQUE_NAME}")
-    ./orchestrator.sh -c -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
-    ./orchestrator.sh -s "WORKING" -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
-    ./orchestrator.sh -w "WORKING=${NODES}" -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
-    IPADDRS=$(./orchestrator.sh -g -n "${TABLE_NAMETAG}_${UNIQUE_NAME}")
+    ./orchestrator.sh -c -n "${TABLE_NAMETAG}"
+    ./orchestrator.sh -s "WORKING" -n "${TABLE_NAMETAG}"
+    ./orchestrator.sh -w "WORKING=${NODES}" -n "${TABLE_NAMETAG}"
+    IPADDRS=$(./orchestrator.sh -g -n "${TABLE_NAMETAG}")
     read -a IPADDRS <<< $IPADDRS
 else
-    #./orchestrator.sh -b -n "${SHARD}_${UNIQUE_NAME}"
-    #./orchestrator.sh -w "WORKING=1" -n "${SHARD}_${UNIQUE_NAME}"
-    #./orchestrator.sh -s "WORKING" -n "${SHARD}_${UNIQUE_NAME}"
-    ./orchestrator.sh -b -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
-    ./orchestrator.sh -w "WORKING=1" -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
-    ./orchestrator.sh -s "WORKING" -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
+    ./orchestrator.sh -b -n "${TABLE_NAMETAG}"
+    ./orchestrator.sh -w "WORKING=1" -n "${TABLE_NAMETAG}"
+    ./orchestrator.sh -s "WORKING" -n "${TABLE_NAMETAG}"
     NODE_TYPE="Secondary"
-    ./orchestrator.sh -w "WORKING=${NODES}" -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
+    ./orchestrator.sh -w "WORKING=${NODES}" -n "${TABLE_NAMETAG}"
 fi
 
 
@@ -101,8 +88,8 @@ touch /etc/udev/rules.d/85-ebs.rules
 echo 'ACTION=="add", KERNEL=="'$1'", ATTR{bdi/read_ahead_kb}="16"' | tee -a /etc/udev/rules.d/85-ebs.rules
 echo "* soft nofile 64000
 * hard nofile 64000
-* soft nproc 32000
-* hard nproc 32000" > /etc/limits.conf
+* soft nproc 64000
+* hard nproc 64000" > /etc/limits.conf
 #################################################################
 # End All Nodes
 #################################################################
@@ -162,14 +149,13 @@ db.createUser(
 );
 EOF
 
-    service mongod stop
-    ./orchestrator.sh -k -n $DDB_TABLE
+    ./orchestrator.sh -k -n "${TABLE_NAMETAG}"
     sleep 5
-    setup_security_common $DDB_TABLE
+    setup_security_common "${TABLE_NAMETAG}"
     sleep 5
-    service mongod start
+    service mongod restart
     sleep 10
-    ./orchestrator.sh -s "SECURED" -n $DDB_TABLE
+    ./orchestrator.sh -s "SECURED" -n "${TABLE_NAMETAG}"
 }
 
 #################################################################
@@ -201,19 +187,12 @@ echo "" >> mongod.conf
 echo "processManagement:" >> mongod.conf
 echo "  fork: true" >> mongod.conf
 echo "  pidFilePath: /var/run/mongod/mongod.pid" >> mongod.conf
-
-#################################################################
-#  Enable munin plugins for iostat and iostat_ios
-#################################################################
-ln -s /usr/share/munin/plugins/iostat /etc/munin/plugins/iostat
-ln -s /usr/share/munin/plugins/iostat_ios /etc/munin/plugins/iostat_ios
-touch /var/lib/munin/plugin-state/iostat-ios.state
-chown munin:munin /var/lib/munin/plugin-state/iostat-ios.state
+echo "" >> mongod.conf
 
 #################################################################
 #  Figure out how much RAM we have and how to slice it up
 #################################################################
-memory=$(vmstat -s | grep "total memory" | sed -e 's/ total.*//g' | sed -e 's/[ ]//g' | tr -d '\n')
+memory=$(vmstat -s | grep "total memory" | sed -e 's/K total.*//g' | sed -e 's/[ ]//g' | tr -d '\n')
 memory=$(printf %.0f $(echo "${memory} / 1024 / 1 * .9 / 1024" | bc))
 
 if [ ${memory} -lt 1 ]; then
@@ -307,7 +286,7 @@ EOF
     # Configure the replica sets, set this host as Primary with
     # highest priority
     #################################################################
-    if [ "${NODES}" == "3" ]; then
+    if [ "${NODES}" -gt "3" ]; then
         port=27017
         conf="{\"_id\" : \"${TABLE_NAMETAG}\", \"version\" : 1, \"members\" : ["
         node=1
@@ -316,11 +295,12 @@ EOF
             addr="${addr%\"}"
             addr="${addr#\"}"
 
-            priority=5
+            priority=0
+            votes=0
             if [ "${addr}" == "${IP}" ]; then
                 priority=10
             fi
-            conf="${conf}{\"_id\" : ${node}, \"host\" :\"${addr}:${port}\", \"priority\":${priority}}"
+            conf="${conf}{\"_id\" : ${node}, \"host\" :\"${addr}:${port}\", \"priority\": ${priority}, \"votes\": ${votes}}"
 
             if [ $node -lt ${NODES} ]; then
                 conf=${conf}","
@@ -332,7 +312,7 @@ EOF
         conf=${conf}"]}"
         echo ${conf}
 
-mongo --port ${port} << EOF
+mongo --port ${port} -u ${MONGODB_ADMIN_USER} -p ${MONGO_PASSWORD} << EOF
 rs.initiate(${conf})
 EOF
 
@@ -344,11 +324,12 @@ EOF
         port=27017
 
         priority=10
+        votes=0
         conf="{\"_id\" : \"${TABLE_NAMETAG}\", \"version\" : 1, \"members\" : ["
-        conf="${conf}{\"_id\" : 1, \"host\" :\"${IP}:${port}\", \"priority\":${priority}}"
+        conf="${conf}{\"_id\" : 1, \"host\" :\"${IP}:${port}\", \"priority\":${priority}, \"votes\": ${votes}}"
         conf=${conf}"]}"
 
-mongo --port ${port} << EOF
+mongo --port ${port} -u ${MONGODB_ADMIN_USER} -p ${MONGO_PASSWORD} << EOF
 rs.initiate(${conf})
 EOF
 
@@ -358,31 +339,31 @@ EOF
     #  Update status to FINISHED, if this is s0 then wait on the rest
     #  of the nodes to finish and remove orchestration tables
     #################################################################
-    ./orchestrator.sh -s "FINISHED" -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
-    ./orchestrator.sh -w "FINISHED=${NODES}" -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
+    ./orchestrator.sh -s "FINISHED" -n "${TABLE_NAMETAG}"
+    ./orchestrator.sh -w "FINISHED=${NODES}" -n "${TABLE_NAMETAG}"
 
-    echo "Setting up security, bootstrap table: " "${TABLE_NAMETAG}_${UNIQUE_NAME}"
+    echo "Setting up security, bootstrap table: " "${TABLE_NAMETAG}"
     # wait for mongo to become primary
     sleep 10
     check_primary true
 
-    setup_security_primary "${TABLE_NAMETAG}_${UNIQUE_NAME}"
+    setup_security_primary "${TABLE_NAMETAG}"
 
-    ./orchestrator.sh -w "SECURED=${NODES}" -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
-    ./orchestrator.sh -d -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
+    ./orchestrator.sh -w "SECURED=${NODES}" -n "${TABLE_NAMETAG}"
+    ./orchestrator.sh -d -n "${TABLE_NAMETAG}"
     rm /tmp/mongo_pass.txt
 else
     #################################################################
     #  Update status of Secondary to FINISHED
     #################################################################
-    ./orchestrator.sh -s "FINISHED" -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
-    ./orchestrator.sh -w "FINISHED=${NODES}" -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
+    ./orchestrator.sh -s "FINISHED" -n "${TABLE_NAMETAG}"
+    ./orchestrator.sh -w "FINISHED=${NODES}" -n "${TABLE_NAMETAG}"
 
-    ./orchestrator.sh -w "SECURED=1" -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
+    ./orchestrator.sh -w "SECURED=1" -n "${TABLE_NAMETAG}"
     service mongod stop
-    setup_security_common "${TABLE_NAMETAG}_${UNIQUE_NAME}"
+    setup_security_common "${TABLE_NAMETAG}"
     service mongod start
-    ./orchestrator.sh -s "SECURED" -n "${TABLE_NAMETAG}_${UNIQUE_NAME}"
+    ./orchestrator.sh -s "SECURED" -n "${TABLE_NAMETAG}"
     rm /tmp/mongo_pass.txt
 
 fi

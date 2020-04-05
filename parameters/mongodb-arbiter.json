@@ -8,20 +8,8 @@
     "ParameterValue": "ami-0cbc6aae997c6538a"
   },
   {
-    "ParameterKey": "Iops",
-    "ParameterValue": "100"
-  },
-  {
     "ParameterKey": "KeyName",
     "ParameterValue": "test"
-  },
-  {
-    "ParameterKey": "MongoDBAdminUsername",
-    "ParameterValue": "admin"
-  },
-  {
-    "ParameterKey": "MongoDBAdminPassword",
-    "ParameterValue": "T3st@mongo"
   },
   {
     "ParameterKey": "MongoDBVersion",
@@ -45,7 +33,7 @@
   },
   {
     "ParameterKey": "NodeReplicaSetIndex",
-    "ParameterValue": "1"
+    "ParameterValue": "4"
   },
   {
     "ParameterKey": "NodeSubnet",
@@ -66,14 +54,6 @@
   {
     "ParameterKey": "S3KeyPrefix",
     "ParameterValue": "mongodb/"
-  },
-  {
-    "ParameterKey": "VolumeSize",
-    "ParameterValue": "20"
-  },
-  {
-    "ParameterKey": "VolumeType",
-    "ParameterValue": "gp2"
   },
   {
     "ParameterKey": "VPC",

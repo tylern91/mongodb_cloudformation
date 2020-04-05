@@ -294,7 +294,8 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          SourceSecurityGroupId: !Ref BastionSecurityGroupID
+          CidrIp: 0.0.0.0/0
+          #SourceSecurityGroupId: !Ref BastionSecurityGroupID
         - IpProtocol: tcp
           FromPort: 27017
           ToPort: 27030
@@ -384,7 +385,7 @@ Resources:
                   - 'dynamodb:UpdateTable'
                 Resource:
                   - !Sub >-
-                    arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*MONGODB_*
+                    arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*
   MongoDBNodeIAMProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
@@ -438,7 +439,7 @@ Resources:
     DependsOn: PrimaryReplicaNode0
     Properties:
       Handle: !Ref PrimaryReplicaNode0WaitForNodeInstallWaitHandle
-      Timeout: '1800'
+      Timeout: '3600'
   SecondaryReplicaNode0WaitForNodeInstallWaitHandle:
     Type: 'AWS::CloudFormation::WaitConditionHandle'
     Properties: {}
@@ -475,7 +476,7 @@ Resources:
         NodeInstanceType: !Ref ReplicaInstanceType
         NodeReplicaSetIndex: '1'
         NodeSubnet: !Ref Secondary0NodeSubnet
-        NodeNameTag: PrimaryReplicaNode0
+        NodeNameTag: SecondaryReplicaNode0
         ReplicaNodeWaitForNodeInstallWaitHandle: !Ref PrimaryReplicaNode0WaitForNodeInstallWaitHandle
         ReplicaSetName: !Ref ReplicaSetName
         S3BucketName: !Ref S3BucketName
@@ -489,7 +490,7 @@ Resources:
     DependsOn: SecondaryReplicaNode0
     Properties:
       Handle: !Ref SecondaryReplicaNode0WaitForNodeInstallWaitHandle
-      Timeout: '1800'
+      Timeout: '3600'
   SecondaryReplicaNode1WaitForNodeInstallWaitHandle:
     Type: 'AWS::CloudFormation::WaitConditionHandle'
     Properties: {}
@@ -526,7 +527,7 @@ Resources:
         NodeInstanceType: !Ref ReplicaInstanceType
         NodeReplicaSetIndex: '2'
         NodeSubnet: !Ref Secondary1NodeSubnet
-        NodeNameTag: PrimaryReplicaNode0
+        NodeNameTag: SecondaryReplicaNode1
         ReplicaNodeWaitForNodeInstallWaitHandle: !Ref PrimaryReplicaNode0WaitForNodeInstallWaitHandle
         ReplicaSetName: !Ref ReplicaSetName
         S3BucketName: !Ref S3BucketName
@@ -540,7 +541,7 @@ Resources:
     DependsOn: SecondaryReplicaNode1
     Properties:
       Handle: !Ref SecondaryReplicaNode1WaitForNodeInstallWaitHandle
-      Timeout: '1800'
+      Timeout: '3600'
   ArbiterNode0WaitForNodeInstallWaitHandle:
     Type: 'AWS::CloudFormation::WaitConditionHandle'
     Properties: {}
@@ -566,7 +567,6 @@ Resources:
           - AWSAMIRegionMap
           - !Ref 'AWS::Region'
           - AMZNLINUX2
-        Iops: !Ref Iops
         KeyName: !Ref KeyPairName
         MongoDBServerSecurityGroupID: !Ref MongoDBServerSecurityGroup
         MongoDBInterServersSecurityGroupID: !Ref MongoDBInterServersSecurityGroup
@@ -587,7 +587,7 @@ Resources:
     DependsOn: ArbiterNode0
     Properties:
       Handle: !Ref ArbiterNode0WaitForNodeInstallWaitHandle
-      Timeout: '1800'
+      Timeout: '3600'
 
 Outputs:
   PrimaryReplicaNodeIp:

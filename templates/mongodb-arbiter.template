@@ -132,7 +132,7 @@ Resources:
           Ebs:
             VolumeType: gp2
             DeleteOnTermination: true
-            VolumeSize: 16
+            VolumeSize: 8
             Encrypted: true
       UserData: !Base64
         'Fn::Join':
@@ -146,6 +146,29 @@ Resources:
             - !Ref 'AWS::Region'
             - |+
 
+            - |
+              mkdir -p /home/ec2-user/.aws
+            - |
+              cd /home/ec2-user/.aws
+            - |
+            - 'echo '
+            - !Join
+              - ''
+              - - '"'
+                - '['
+                - default
+                - ']'
+                - '"'
+            - |2
+               >> config
+            - 'echo '
+            - !Join
+              - ''
+              - - region
+                - =
+                - !Ref 'AWS::Region'
+            - |2
+               >> config
             - |
               mkdir -p /home/ec2-user/mongodb
             - |
