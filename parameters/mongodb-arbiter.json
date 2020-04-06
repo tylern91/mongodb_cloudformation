@@ -44,6 +44,10 @@
     "ParameterValue": "projects"
   },
   {
+    "ParameterKey": "PrimaryReplicaNodeIp",
+    "ParameterValue": "172.31.10.10"
+  },
+  {
     "ParameterKey": "ReplicaSetName",
     "ParameterValue": "test"
   },
