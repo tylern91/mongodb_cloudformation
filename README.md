@@ -23,6 +23,9 @@ This module will do the following:
 *   Create the associate IAM role for EC2 instances for handling the operations (e.g initiate, backup, fetch templates from S3, etc.).
 *   Configurations for the MongoDB storage engine (currently support only wiredTiger) and auto-discovery.
 *   Using the separated EBS volume with io1 volume type support for handling the MongoDB's data.
+*   See the list of instance types support for replica and arbiter nodes:
+    *   [Replica node](https://github.com/tylern91/mongodb_cloudformation/blob/5db6189466a2c7ada9f16ca67d52bda2699f5904/templates/mongodb-node.template#L61-L81)
+    *   [Arbiter node](https://github.com/tylern91/mongodb_cloudformation/blob/5db6189466a2c7ada9f16ca67d52bda2699f5904/templates/mongodb-arbiter.template#L57-L68)
 
 ## Creating the stack
 
