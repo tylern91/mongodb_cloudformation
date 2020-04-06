@@ -396,6 +396,7 @@ Resources:
     Type: 'AWS::CloudFormation::WaitConditionHandle'
     Properties: {}
   PrimaryReplicaNode0:
+    DependsOn: PrimaryReplicaNode0WaitForNodeInstallWaitHandle
     Type: 'AWS::CloudFormation::Stack'
     Properties:
       TemplateURL: !Sub
@@ -445,6 +446,7 @@ Resources:
     Properties: {}
     Condition: CreateThreeReplicaSet
   SecondaryReplicaNode0:
+    DependsOn: SecondaryReplicaNode0WaitForNodeInstallWaitHandle
     Condition: CreateThreeReplicaSet
     Type: 'AWS::CloudFormation::Stack'
     Properties:
@@ -477,7 +479,7 @@ Resources:
         NodeReplicaSetIndex: '1'
         NodeSubnet: !Ref Secondary0NodeSubnet
         NodeNameTag: SecondaryReplicaNode0
-        ReplicaNodeWaitForNodeInstallWaitHandle: !Ref PrimaryReplicaNode0WaitForNodeInstallWaitHandle
+        ReplicaNodeWaitForNodeInstallWaitHandle: !Ref SecondaryReplicaNode0WaitForNodeInstallWaitHandle
         ReplicaSetName: !Ref ReplicaSetName
         S3BucketName: !Ref S3BucketName
         S3KeyPrefix: !Ref S3KeyPrefix
@@ -496,6 +498,7 @@ Resources:
     Properties: {}
     Condition: CreateThreeReplicaSet
   SecondaryReplicaNode1:
+    DependsOn: SecondaryReplicaNode1WaitForNodeInstallWaitHandle
     Condition: CreateThreeReplicaSet
     Type: 'AWS::CloudFormation::Stack'
     Properties:
@@ -528,7 +531,7 @@ Resources:
         NodeReplicaSetIndex: '2'
         NodeSubnet: !Ref Secondary1NodeSubnet
         NodeNameTag: SecondaryReplicaNode1
-        ReplicaNodeWaitForNodeInstallWaitHandle: !Ref PrimaryReplicaNode0WaitForNodeInstallWaitHandle
+        ReplicaNodeWaitForNodeInstallWaitHandle: !Ref SecondaryReplicaNode1WaitForNodeInstallWaitHandle
         ReplicaSetName: !Ref ReplicaSetName
         S3BucketName: !Ref S3BucketName
         S3KeyPrefix: !Ref S3KeyPrefix
@@ -538,7 +541,7 @@ Resources:
   SecondaryReplicaNode1WaitForNodeInstall:
     Type: 'AWS::CloudFormation::WaitCondition'
     Condition: CreateThreeReplicaSet
-    DependsOn: SecondaryReplicaNode1
+    DependsOn: PrimaryReplicaNode0
     Properties:
       Handle: !Ref SecondaryReplicaNode1WaitForNodeInstallWaitHandle
       Timeout: '3600'
