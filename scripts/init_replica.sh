@@ -146,15 +146,6 @@ echo "  oplogSizeMB: 5120" >> /etc/mongod.conf
 echo CGROUP_DAEMON="memory:mongod" > /etc/sysconfig/mongod
 
 #################################################################
-#  Start all mongod processes
-#################################################################
-chkconfig mongod on
-if [ "$version" != "3.6" ] && [ "$version" != "4.0" ];  then
-    enable_all_listen
-fi
-service mongod start
-
-#################################################################
 # Listen to all interfaces, not just local
 #################################################################
 
@@ -222,6 +213,15 @@ EOF
     service mongod start
     sleep 10
 }
+
+#################################################################
+#  Start all mongod processes
+#################################################################
+chkconfig mongod on
+if [ "$version" != "3.6" ] && [ "$version" != "4.0" ];  then
+    enable_all_listen
+fi
+service mongod start
 
 #################################################################
 #  Primaries initiate replica sets
@@ -338,7 +338,7 @@ EOF
 
     ./orchestrator.sh -s "SECURED" -n "${TABLE_NAMETAG}"
     ./orchestrator.sh -w "SECURED=${NODES}" -n "${TABLE_NAMETAG}"
-    ./orchestrator.sh -d -n "${TABLE_NAMETAG}"
+    #./orchestrator.sh -d -n "${TABLE_NAMETAG}"
     rm /tmp/mongo_pass.txt
 else
     #################################################################

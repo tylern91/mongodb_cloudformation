@@ -18,6 +18,23 @@ Parameters:
     Description: >-
       Name of an existing EC2 KeyPair. MongoDB instances will launch with this
       KeyPair.
+  MongoDBAdminUsername:
+    Default: admin
+    NoEcho: 'true'
+    Description: MongoDB admin account username
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+  MongoDBAdminPassword:
+    AllowedPattern: '([A-Za-z0-9_@-]{8,32})'
+    ConstraintDescription: >-
+      Input your MongoDB database password, Min 8, Maximum of 32 characters.
+      Allowed characters are: [A-Za-z0-9_@-]
+    Description: 'Enter your MongoDB Database Password, Min 8, maximum of 32 characters.'
+    NoEcho: 'true'
+    Type: String
   MongoDBInterServersSecurityGroupID:
     Description: >-
       ID of the MongoDB Inter-Server Communication Security Group (e.g., sg-7f16e910)
@@ -58,7 +75,10 @@ Parameters:
   NodeNameTag:
     Description: Instance Name
     Type: String
-  ReplicaNodeWaitForNodeInstallWaitHandle:
+  PrimaryReplicaNodeIp:
+    Description: Private IP Address of Primary Replica Node for Arbiter initialization
+    Type: String
+  ArbiterNodeWaitForNodeInstallWaitHandle:
     Description: Pre-signed Wait Handle URL to send signal for associated wait condition
     Type: String
   ReplicaSetName:
@@ -245,9 +265,34 @@ Resources:
               - ''
               - - '"'
                 - export WAITHANDLER='
-                - !Ref ReplicaNodeWaitForNodeInstallWaitHandle
+                - !Ref ArbiterNodeWaitForNodeInstallWaitHandle
                 - ''''
                 - '"'
+            - |2
+               >> config.sh
+            - |
+              #  Get the Primary Private IP
+            - 'echo '
+            - !Join
+              - ''
+              - - export PRIMARY_IP=
+                - !Ref PrimaryReplicaNodeIp
+            - |2
+               >> config.sh
+            - |
+              #  Get the Replicaset Credentials
+            - 'echo '
+            - !Join
+              - ''
+              - - export MONGODB_ADMIN_USER=
+                - !Ref MongoDBAdminUsername
+            - |2
+               >> config.sh
+            - 'echo '
+            - !Join
+              - ''
+              - - export MONGO_PASSWORD=
+                - !Ref MongoDBAdminPassword
             - |2
                >> config.sh
             - |

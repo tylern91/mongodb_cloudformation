@@ -541,7 +541,7 @@ Resources:
   SecondaryReplicaNode1WaitForNodeInstall:
     Type: 'AWS::CloudFormation::WaitCondition'
     Condition: CreateThreeReplicaSet
-    DependsOn: PrimaryReplicaNode0
+    DependsOn: SecondaryReplicaNode1
     Properties:
       Handle: !Ref SecondaryReplicaNode1WaitForNodeInstallWaitHandle
       Timeout: '3600'
@@ -550,6 +550,7 @@ Resources:
     Properties: {}
     Condition: CreateThreeReplicaSet
   ArbiterNode0:
+    DependsOn: PrimaryReplicaNode0WaitForNodeInstall
     Condition: CreateThreeReplicaSet
     Type: 'AWS::CloudFormation::Stack'
     Properties:
@@ -571,6 +572,8 @@ Resources:
           - !Ref 'AWS::Region'
           - AMZNLINUX2
         KeyName: !Ref KeyPairName
+        MongoDBAdminUsername: !Ref MongoDBAdminUsername
+        MongoDBAdminPassword: !Ref MongoDBAdminPassword
         MongoDBServerSecurityGroupID: !Ref MongoDBServerSecurityGroup
         MongoDBInterServersSecurityGroupID: !Ref MongoDBInterServersSecurityGroup
         MongoDBNodeIAMProfileID: !Ref MongoDBNodeIAMProfile
@@ -579,7 +582,10 @@ Resources:
         NodeReplicaSetIndex: '3'
         NodeSubnet: !Ref Arbiter0NodeSubnet
         NodeNameTag: ArbiterNode0
-        ReplicaNodeWaitForNodeInstallWaitHandle: !Ref PrimaryReplicaNode0WaitForNodeInstallWaitHandle
+        PrimaryReplicaNodeIp: !GetAtt
+          - PrimaryReplicaNode0
+          - Outputs.NodePrivateIp
+        ArbiterNodeWaitForNodeInstallWaitHandle: !Ref ArbiterNode0WaitForNodeInstallWaitHandle
         ReplicaSetName: !Ref ReplicaSetName
         S3BucketName: !Ref S3BucketName
         S3KeyPrefix: !Ref S3KeyPrefix
@@ -607,6 +613,12 @@ Outputs:
   SecondaryReplicaNode1Ip:
     Value: !GetAtt
       - SecondaryReplicaNode1
+      - Outputs.NodePrivateIp
+    Description: Private IP Address of Secondary Replica 1 Node
+    Condition: CreateThreeReplicaSet
+  ArbiterNode0Ip:
+    Value: !GetAtt
+      - ArbiterNode0
       - Outputs.NodePrivateIp
     Description: Private IP Address of Secondary Replica 1 Node
     Condition: CreateThreeReplicaSet
