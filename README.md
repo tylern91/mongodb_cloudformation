@@ -83,6 +83,10 @@ The following table lists the configurable parameters of the MongoDB replica set
 
 Specify each parameter by modifying the JSON parameter files in `parameters` folder.
 
+## How to use
+
+Please follow this tutorial for accessing the MongoDB replica set from AWS Lambda: [Best Practices Connecting from AWS Lambda](https://docs.atlas.mongodb.com/best-practices-connecting-to-aws-lambda/)
+
 ## Backup MongoDB to S3
 
 For the backup strategy, we would go with [mongodump](https://docs.mongodb.com/v4.0/reference/program/mongodump/) since it is part of the MongoDB tools package. Based on that, I prepare the tiny script which can help you to backup your MongdoDB database and even can run it as schedule in arbiter node (or somewhere else in the same VPC). The `mongo_s3_backup.sh` shell script can be found in `scripts` folder.
