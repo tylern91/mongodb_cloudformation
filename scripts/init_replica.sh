@@ -44,7 +44,6 @@ sleep 5
 yum --enablerepo=epel install node npm -y
 
 yum install -y mongodb-org
-yum install -y munin-node
 yum install -y libcgroup
 yum -y install mongo-10gen-server mongodb-org-shell
 yum -y install sysstat
@@ -90,73 +89,6 @@ echo "* soft nofile 64000
 * hard nofile 64000
 * soft nproc 64000
 * hard nproc 64000" > /etc/limits.conf
-#################################################################
-# End All Nodes
-#################################################################
-
-#################################################################
-# Listen to all interfaces, not just local
-#################################################################
-
-enable_all_listen() {
-  for f in /etc/mongo*.conf
-  do
-    sed -e '/bindIp/s/^/#/g' -i ${f}
-    sed -e '/bind_ip/s/^/#/g' -i ${f}
-    echo " Set listen to all interfaces : ${f}"
-  done
-}
-
-check_primary() {
-    expected_state=$1
-    master_substr=\"ismaster\"\ :\ ${expected_state}
-    while true; do
-      check_master=$( mongo --eval "printjson(db.isMaster())" )
-      log "${check_master}..."
-      if [[ $check_master == *"$master_substr"* ]]; then
-        log "Node is in desired state, proceed with security setup"
-        break
-      else
-        log "Wait for node to become primary"
-        sleep 10
-      fi
-    done
-}
-
-setup_security_common() {
-    DDB_TABLE=$1
-    auth_key=$(./orchestrator.sh -f -n $DDB_TABLE)
-    echo $auth_key > /mongo_auth/mongodb.key
-    chmod 400 /mongo_auth/mongodb.key
-    chown -R mongod:mongod /mongo_auth
-    sed $'s/processManagement:/security: \\\n  authorization: enabled \\\n  keyFile: \/mongo_auth\/mongodb.key \\\n\\\n&/g' /etc/mongod.conf >> /tmp/mongod_sec.txt
-    mv /tmp/mongod_sec.txt /etc/mongod.conf
-}
-
-setup_security_primary() {
-    DDB_TABLE=$1
-    port=27017
-    MONGO_PASSWORD=$( cat /tmp/mongo_pass.txt )
-
-mongo --port ${port} << EOF
-use admin;
-db.createUser(
-  {
-    user: "${MONGODB_ADMIN_USER}",
-    pwd: "${MONGO_PASSWORD}",
-    roles: [ { role: "root", db: "admin" } ]
-  }
-);
-EOF
-
-    ./orchestrator.sh -k -n "${TABLE_NAMETAG}"
-    sleep 5
-    setup_security_common "${TABLE_NAMETAG}"
-    sleep 5
-    service mongod restart
-    sleep 10
-    ./orchestrator.sh -s "SECURED" -n "${TABLE_NAMETAG}"
-}
 
 #################################################################
 # Setup MongoDB servers and config nodes
@@ -213,45 +145,83 @@ echo "  oplogSizeMB: 5120" >> /etc/mongod.conf
 
 echo CGROUP_DAEMON="memory:mongod" > /etc/sysconfig/mongod
 
-echo "mount {
-    cpuset  = /cgroup/cpuset;
-    cpu     = /cgroup/cpu;
-    cpuacct = /cgroup/cpuacct;
-    memory  = /cgroup/memory;
-    devices = /cgroup/devices;
-  }
-
-  group mongod {
-    perm {
-      admin {
-        uid = mongod;
-        gid = mongod;
-      }
-      task {
-        uid = mongod;
-        gid = mongod;
-      }
-    }
-    memory {
-      memory.limit_in_bytes = ${memory}G;
-      }
-  }" > /etc/cgconfig.conf
-
-
 #################################################################
-#  Start cgconfig, munin-node, and all mongod processes
+#  Start all mongod processes
 #################################################################
-chkconfig cgconfig on
-service cgconfig start
-
-chkconfig munin-node on
-service munin-node start
-
 chkconfig mongod on
 if [ "$version" != "3.6" ] && [ "$version" != "4.0" ];  then
     enable_all_listen
 fi
 service mongod start
+
+#################################################################
+# Listen to all interfaces, not just local
+#################################################################
+
+enable_all_listen() {
+  for f in /etc/mongo*.conf
+  do
+    sed -e '/bindIp/s/^/#/g' -i ${f}
+    sed -e '/bind_ip/s/^/#/g' -i ${f}
+    echo " Set listen to all interfaces : ${f}"
+  done
+}
+
+check_primary() {
+    expected_state=$1
+    master_substr=\"ismaster\"\ :\ ${expected_state}
+
+mongo --port ${port} << EOF
+rs.initiate()
+EOF
+
+    while true; do
+      check_master=$( mongo --eval "printjson(db.isMaster())" )
+      log "${check_master}..."
+      if [[ $check_master == *"$master_substr"* ]]; then
+        log "Node is in desired state, proceed with security setup"
+        break
+      else
+        log "Wait for node to become primary"
+        sleep 10
+      fi
+    done
+}
+
+setup_security_common() {
+    DDB_TABLE=$1
+    auth_key=$(./orchestrator.sh -f -n $DDB_TABLE)
+    echo $auth_key > /mongo_auth/mongodb.key
+    chmod 400 /mongo_auth/mongodb.key
+    chown -R mongod:mongod /mongo_auth
+    sed $'s/processManagement:/security: \\\n  authorization: enabled \\\n  keyFile: \/mongo_auth\/mongodb.key \\\n\\\n&/g' /etc/mongod.conf >> /tmp/mongod_sec.txt
+    mv /tmp/mongod_sec.txt /etc/mongod.conf
+}
+
+setup_security_primary() {
+    DDB_TABLE=$1
+    port=27017
+    MONGO_PASSWORD=$( cat /tmp/mongo_pass.txt )
+
+mongo --port ${port} << EOF
+use admin;
+db.createUser(
+  {
+    user: "${MONGODB_ADMIN_USER}",
+    pwd: "${MONGO_PASSWORD}",
+    roles: [ { role: "root", db: "admin" } ]
+  }
+);
+EOF
+
+    service mongod stop
+    ./orchestrator.sh -k -n "${TABLE_NAMETAG}"
+    sleep 5
+    setup_security_common "${TABLE_NAMETAG}"
+    sleep 5
+    service mongod start
+    sleep 10
+}
 
 #################################################################
 #  Primaries initiate replica sets
@@ -297,9 +267,6 @@ EOF
 
             priority=0
             votes=0
-            if [ "${addr}" == "${IP}" ]; then
-                priority=10
-            fi
             conf="${conf}{\"_id\" : ${node}, \"host\" :\"${addr}:${port}\", \"priority\": ${priority}, \"votes\": ${votes}}"
 
             if [ $node -lt ${NODES} ]; then
@@ -312,7 +279,7 @@ EOF
         conf=${conf}"]}"
         echo ${conf}
 
-mongo --port ${port} -u ${MONGODB_ADMIN_USER} -p ${MONGO_PASSWORD} << EOF
+mongo --port ${port} << EOF
 rs.initiate(${conf})
 EOF
 
@@ -323,13 +290,13 @@ EOF
     else
         port=27017
 
-        priority=10
+        priority=0
         votes=0
         conf="{\"_id\" : \"${TABLE_NAMETAG}\", \"version\" : 1, \"members\" : ["
         conf="${conf}{\"_id\" : 1, \"host\" :\"${IP}:${port}\", \"priority\":${priority}, \"votes\": ${votes}}"
         conf=${conf}"]}"
 
-mongo --port ${port} -u ${MONGODB_ADMIN_USER} -p ${MONGO_PASSWORD} << EOF
+mongo --port ${port} << EOF
 rs.initiate(${conf})
 EOF
 
@@ -349,6 +316,27 @@ EOF
 
     setup_security_primary "${TABLE_NAMETAG}"
 
+    for addr in "${IPADDRS[@]}"
+    do
+        addr="${addr%\"}"
+        addr="${addr#\"}"
+
+        port=27017
+        node=1
+        priority=0
+        votes=0
+        if [ "${addr}" != "${IP}" ] || [ $node -lt ${NODES} ]; then
+            repl="{\"host\" :\"${addr}:${port}\", \"priority\": ${priority}, \"votes\": ${votes}}"
+
+mongo --port ${port} -u ${MONGODB_ADMIN_USER} -p ${MONGO_PASSWORD} << EOF
+rs.add(${repl})
+EOF
+
+        fi
+        (( node++ ))
+    done
+
+    ./orchestrator.sh -s "SECURED" -n "${TABLE_NAMETAG}"
     ./orchestrator.sh -w "SECURED=${NODES}" -n "${TABLE_NAMETAG}"
     ./orchestrator.sh -d -n "${TABLE_NAMETAG}"
     rm /tmp/mongo_pass.txt
