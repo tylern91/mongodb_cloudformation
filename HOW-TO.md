@@ -86,6 +86,18 @@ $ sudo xfs_growfs -d /var/lib/mongodb-data
 $ df -h
 ```
 
+## Create the MongoDB backup
+
+Simply create the backup location in S3 bucket and update the location path to the `mongodb_s3_backup.sh` script then run inside the MongoDB instance and provide the `username` and `password` of MongoDB replica set.
+
+```bash
+$ sh ./mongodb_s3_backup.sh
+Your MongoDB administrator username:
+Your MongoDB administrator password:
+```
+
+Reference [scripts/mongo_s3_backup.sh](https://github.com/tylern91/mongodb_cloudformation/blob/master/scripts/mongo_s3_backup.sh) for the details
+
 ## Deleting the stack
 
 Delete the stack deployment as normal
