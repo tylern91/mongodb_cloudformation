@@ -620,7 +620,30 @@ Outputs:
     Value: !GetAtt
       - ArbiterNode0
       - Outputs.NodePrivateIp
-    Description: Private IP Address of Secondary Replica 1 Node
+    Description: Private IP Address of Arbiter 0 Node
+    Condition: CreateThreeReplicaSet
+  PrimaryReplicaNodePublicIp:
+    Value: !GetAtt
+      - PrimaryReplicaNode0
+      - Outputs.NodePublicIp
+    Description: Public IP Address of Primary Replica Node
+  SecondaryReplicaNode0PublicIp:
+    Value: !GetAtt
+      - SecondaryReplicaNode0
+      - Outputs.NodePublicIp
+    Description: Public IP Address of Secondary Replica 0 Node
+    Condition: CreateThreeReplicaSet
+  SecondaryReplicaNode1PublicIp:
+    Value: !GetAtt
+      - SecondaryReplicaNode1
+      - Outputs.NodePublicIp
+    Description: Public IP Address of Secondary Replica 1 Node
+    Condition: CreateThreeReplicaSet
+  ArbiterNode0PublicIp:
+    Value: !GetAtt
+      - ArbiterNode0
+      - Outputs.NodePublicIp
+    Description: Public IP Address of Arbiter 0 Node
     Condition: CreateThreeReplicaSet
   MongoDBServerAccessSecurityGroup:
     Value: !Ref MongoDBServerAccessSecurityGroup
