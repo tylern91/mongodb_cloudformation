@@ -27,28 +27,6 @@ This module will do the following:
     *   [Replica node](https://github.com/tylern91/mongodb_cloudformation/blob/5db6189466a2c7ada9f16ca67d52bda2699f5904/templates/mongodb-node.template#L61-L81)
     *   [Arbiter node](https://github.com/tylern91/mongodb_cloudformation/blob/5db6189466a2c7ada9f16ca67d52bda2699f5904/templates/mongodb-arbiter.template#L57-L68)
 
-## Creating the stack
-
-To create the stack with the stack name `my-release`:
-
-```bash
-# Create the replica set with 1 or 3 nodes
-$ aws cloudformation create-stack --stack-name my-release --template-body file://templates/mongodb-master.template --parameters file://parameters/mongodb-master.json --capabilities CAPABILITY_IAM
-
-# Create the secondary node joining the current replicaset
-$ aws cloudformation create-stack --stack-name my-release --template-body file://templates/mongodb-node.template --parameters file://parameters/mongodb-node.json --capabilities CAPABILITY_IAM
-
-# Create the another arbiter node joining the current replicaset
-$ aws cloudformation create-stack --stack-name my-release --template-body file://templates/arbiter.template --parameters file://parameters/arbiter.json --capabilities CAPABILITY_IAM
-```
-
-## Deleting the stack
-
-Delete the stack deployment as normal
-
-```bash
-$ aws cloudformation delete-stack --stack-name my-release
-```
 ## Configuration
 
 The following table lists the configurable parameters of the MongoDB replica set and their default values.
@@ -83,9 +61,11 @@ The following table lists the configurable parameters of the MongoDB replica set
 
 Specify each parameter by modifying the JSON parameter files in `parameters` folder.
 
-## How to use
+## Guidelines
 
 Please follow this tutorial for accessing the MongoDB replica set from AWS Lambda: [Best Practices Connecting from AWS Lambda](https://docs.atlas.mongodb.com/best-practices-connecting-to-aws-lambda/)
+
+Preference the [How-to](https://github.com/tylern91/mongodb_cloudformation/blob/master/HOW-TO.md) page for the guidelines
 
 ## Backup MongoDB to S3
 
