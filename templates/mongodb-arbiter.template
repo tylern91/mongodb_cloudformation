@@ -117,7 +117,9 @@ Conditions:
     - mongodb-manifests
 
 Resources:
-  ReplicaNodeNetworkInterface:
+  ArbiterNodeElasticIP:
+    Type: AWS::EC2::EIP
+  ArbiterNodeNetworkInterface:
     Type: 'AWS::EC2::NetworkInterface'
     Properties:
       Description: Network Interface for Mongo Arbiter Node
@@ -129,13 +131,18 @@ Resources:
       Tags:
         - Key: Network
           Value: Private
+  AssociateReplicaNodeNetworkInterface:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt ArbiterNodeElasticIP.AllocationId
+      NetworkInterfaceId: !Ref ArbiterNodeNetworkInterface
   ArbiterNodeInstance:
     Type: 'AWS::EC2::Instance'
     Metadata:
       HostRole: MongoDB Arbiter Node
     Properties:
       NetworkInterfaces:
-        - NetworkInterfaceId: !Ref ReplicaNodeNetworkInterface
+        - NetworkInterfaceId: !Ref ArbiterNodeNetworkInterface
           DeviceIndex: '0'
       KeyName: !Ref KeyName
       ImageId: !Ref ImageId
@@ -337,6 +344,11 @@ Outputs:
       - ArbiterNodeInstance
       - PrivateIp
     Description: Private IP Address of Arbiter Node Instance
+  NodePublicIp:
+    Value: !GetAtt
+      - ArbiterNodeInstance
+      - PublicIp
+    Description: Public IP Address of Arbiter Node Instance
   NodeInstanceID:
     Description: The Instance ID
     Value: !Ref ArbiterNodeInstance

@@ -141,6 +141,8 @@ Conditions:
     - mongodb-manifests
 
 Resources:
+  ReplicaNodeElasticIP:
+    Type: AWS::EC2::EIP
   ReplicaNodeNetworkInterface:
     Type: 'AWS::EC2::NetworkInterface'
     Properties:
@@ -153,6 +155,11 @@ Resources:
       Tags:
         - Key: Network
           Value: Private
+  AssociateReplicaNodeNetworkInterface:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt ReplicaNodeElasticIP.AllocationId
+      NetworkInterfaceId: !Ref ReplicaNodeNetworkInterface
   ReplicaNodeInstance:
     Type: 'AWS::EC2::Instance'
     Metadata:
@@ -368,6 +375,11 @@ Outputs:
       - ReplicaNodeInstance
       - PrivateIp
     Description: Private IP Address of Node Instance
+  NodePublicIp:
+    Value: !GetAtt
+      - ReplicaNodeInstance
+      - PublicIp
+    Description: Public IP Address of Node Instance
   NodeInstanceID:
     Description: The Instance ID
     Value: !Ref ReplicaNodeInstance
